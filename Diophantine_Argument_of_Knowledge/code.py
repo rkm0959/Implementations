@@ -4,9 +4,11 @@
 # this code does not really care about reducing proof sizes as long as they are doable
 
 import random
+from collections import namedtuple
 from Crypto.Util.number import inverse, getPrime, isPrime
 # support functions
 
+COMMIT = namedtuple('COMMIT', 'val x r')
 
 def gpow(a, b, c): # a^b mod c
 	if b >= 0:
@@ -241,13 +243,13 @@ class Prover:
 
 	def commit(self, x):
 		r = random.randrange(0, 1 << (self.B + self.k))
-		commit = self.calc(x, r)
-		return r, commit
+		val = self.calc(x, r)
+		return COMMIT(val, x, r)
 
-	def open(self, commit, x, r, display = True):
+	def open(self, commit, display = True):
 		if display == True:
 			print("[+] Alice opening commitment...")
-		result = self.verifier.check_open(commit, x, r)
+		result = self.verifier.check_open(commit.val, commit.x, commit.r)
 		return result
 
 	def display(self, result):
@@ -268,7 +270,7 @@ class Prover:
 			self.display(result)
 		return result
 
-	def prove_open(self, commit, x, r, display = True):
+	def prove_open(self, commit, display = True):
 		if display:
 			print("[+] Alice wants to prove that she knows how to open!")
 		y = random.randrange(0, self.T * self.C * (1 << self.k))
@@ -276,10 +278,10 @@ class Prover:
 		d = self.calc(y, s)
 		if display:
 			print("[+] Sending commit and values, Receiving challenge...")
-		self.send_commit([commit, d])
+		self.send_commit([commit.val, d])
 		c = self.recv_challenge()
-		u = y + c * x
-		v = s + c * r
+		u = y + c * commit.x
+		v = s + c * commit.r
 		if display:
 			print("[+] Sending answer, waiting for verification...")
 		result = self.verifier.verify_open(u, v)
@@ -288,25 +290,25 @@ class Prover:
 		return result
 
 	def trial_open(self):
-		commit = self.calc(525, 3751)
-		result = self.prove_open(commit, 525, 3751)
+		commit = self.commit(525)
+		result = self.prove_open(commit)
 		assert result == True
-		commit = self.calc(528, 3751)
-		result = self.prove_open(commit, 525, 3751)
+		commit = COMMIT(commit.val, 528, commit.r)
+		result = self.prove_open(commit)
 		assert result == False
 
-	def prove_sum(self, commits, xs, rs, display = True):
-		if len(commits) != 3 or len(xs) != 3 or len(rs) != 3:
+	def prove_sum(self, commits, display = True):
+		if len(commits) != 3:
 			print("[-] prove_sum : incorrect array size")
 			return
 		if display:
 			print("[+] Alice wants to prove that sum of two values equal to another!")
 		for i in range(0, 3):
-			result = self.prove_open(commits[i], xs[i], rs[i], False)
+			result = self.prove_open(commits[i], False)
 			if result == False:
 				return False
-		target = (commits[2] * inverse(commits[0] * commits[1], self.N)) % self.N
-		true_r = rs[2] - rs[0] - rs[1]
+		target = (commits[2].val * inverse(commits[0].val * commits[1].val, self.N)) % self.N
+		true_r = commits[2].r - commits[0].r - commits[1].r
 		if display:
 			print("[+] Proving dlog knowledge...")
 		result = self.prove_dlogh(target, true_r)
@@ -316,51 +318,50 @@ class Prover:
 
 	def trial_sum(self):
 		xs = [1378, 67286, 1378+67286]
-		rs = [100, 300, 1678]
-		commits = [self.calc(xs[i], rs[i]) for i in range(0, 3)]
-		result = self.prove_sum(commits, xs, rs)
+		commits = [self.commit(xs[i]) for i in range(0, 3)]
+		result = self.prove_sum(commits)
 		assert result == True
-		xs[2] = 67265
-		commits = [self.calc(xs[i], rs[i]) for i in range(0, 3)]
-		result = self.prove_sum(commits, xs, rs)
+		xs = [1378, 67256, 1378+67286]
+		commits = [self.commit(xs[i]) for i in range(0, 3)]
+		result = self.prove_sum(commits)
 		assert result == False
 	
-	def recv_sum(self, commits, xs, rs):
-		x = xs[0] + xs[1]
-		r, commit = self.commit(x)
-		result = self.prove_sum([commits[0], commits[1], commit], [xs[0], xs[1], x], [rs[0], rs[1], r])
+	def recv_sum(self, commits):
+		x = commits[0].x + commits[1].x
+		commit = self.commit(x)
+		result = self.prove_sum([commits[0], commits[1], commit], False)
 		assert result == True
-		return x, r, commit
+		return commit
 
 	def recv_sub(self, commits, xs, rs):
-		x = xs[0] - xs[1]
-		r, commit = self.commit(x)
-		result = self.prove_sum([commits[1], commit, commits[0]], [xs[1], x, xs[0]], [rs[1], r, rs[0]])
+		x = commits[0].x - commits[1].x
+		commit = self.commit(x)
+		result = self.prove_sum([commits[1], commit, commits[0]], False)
 		assert result == True
-		return x, r, commit
+		return commit
 
-	def prove_mul(self, commits, xs, rs, display = True):
-		if len(commits) != 3 or len(xs) != 3 or len(rs) != 3:
+	def prove_mul(self, commits, display = True):
+		if len(commits) != 3:
 			print("[-] prove_sum : incorrect array size")
 			return
 		if display:
 			print("[+] Alice wants to prove that product of two values equal to another!")
 		for i in range(0, 3):
-			result = self.prove_open(commits[i], xs[i], rs[i], False)
+			result = self.prove_open(commits[i], False)
 			if result == False:
 				return False
 		y = random.randrange(0, self.T * self.C * (1 << self.k))
 		s_1 = random.randrange(0, self.C * (1 << (self.B + 2 * self.k)))
 		s_2 = random.randrange(0, self.C * self.T * (1 << (self.B + 2 * self.k)))
 		d_1 = self.calc(y, s_1)
-		d_2 = (pow(commits[0], y, self.N) * pow(self.h, s_2, self.N)) % self.N
+		d_2 = (pow(commits[0].val, y, self.N) * pow(self.h, s_2, self.N)) % self.N
 		if display:
 			print("[+] Sending commit and values, Receiving challenge...")
-		self.send_commit([commits[0], commits[1], commits[2], d_1, d_2])
+		self.send_commit([commits[0].val, commits[1].val, commits[2].val, d_1, d_2])
 		c = self.recv_challenge()
-		u = y + c * xs[1]
-		v_1 = s_1 + c * rs[1]
-		v_2 = s_2 + c * (rs[2] - xs[1] * rs[0])
+		u = y + c * commits[1].x
+		v_1 = s_1 + c * commits[1].r
+		v_2 = s_2 + c * (commits[2].r - commits[1].x * commits[0].r)
 		if display:
 			print("[+] Sending answer, waiting for verification...")
 		result = self.verifier.verify_mul(u, v_1, v_2)
@@ -369,54 +370,53 @@ class Prover:
 		return result
 
 	def trial_mul(self):
-		xs = [1378, 67286, 1378*67286]
-		rs = [100, 300, 1678]
-		commits = [self.calc(xs[i], rs[i]) for i in range(0, 3)]
-		result = self.prove_mul(commits, xs, rs)
+		xs = [1378, 67286, 1378 * 67286]
+		commits = [self.commit(xs[i]) for i in range(0, 3)]
+		result = self.prove_mul(commits)
 		assert result == True
-		xs[2] = 67265
-		commits = [self.calc(xs[i], rs[i]) for i in range(0, 3)]
-		result = self.prove_mul(commits, xs, rs)
+		xs = [1378, 67256, 1378 * 67286]
+		commits = [self.commit(xs[i]) for i in range(0, 3)]
+		result = self.prove_mul(commits)
 		assert result == False
 
-	def recv_mul(self, commits, xs, rs):
-		x = xs[0] * xs[1]
-		r, commit = self.commit(x)
-		result = self.prove_mul([commits[0], commits[1], commit], [xs[0], xs[1], x], [rs[0], rs[1], r])
+	def recv_mul(self, commits):
+		x = commits[0].x * commits[1].x
+		commit = self.commit(x)
+		result = self.prove_mul([commits[0], commits[1], commit], False)
 		assert result == True
-		return x, r, commit
+		return commit
 
-	def recv_sq(self, commit, x, r):
-		return self.recv_mul([commit, commit], [x, x], [r, r])
+	def recv_sq(self, commit):
+		return self.recv_mul([commit, commit])
 
 	def prove_sumsq(self, S, display = True):
 		if display:
 			print("[+] Preparing commits...")
 		num = len(S)
-		xs, rs, commits = [], [], []
+		commits = []
 		for i in range(0, num):
-			r, commit = self.commit(S[i])
-			xs.append(S[i]), rs.append(r), commits.append(commit)
+			commit = self.commit(S[i])
+			commits.append(commit)
 		for i in range(0, num):
-			x, r, commit = self.recv_sq(commits[i], xs[i], rs[i])
-			xs.append(x), rs.append(r), commits.append(commit)
-		x, r, commit = self.recv_sum([commits[num], commits[num+1]], [xs[num], xs[num+1]], [rs[num], rs[num+1]])
-		xs.append(x), rs.append(r), commits.append(commit)
+			commit = self.recv_sq(commits[i])
+			commits.append(commit)
+		commit = self.recv_sum([commits[num], commits[num+1]])
+		commits.append(commit)
 		for i in range(2, num):
-			x, r, commit = self.recv_sum([commits[num+i], commits[2*num-2+i]], [xs[num+i], xs[2*num-2+i]], [rs[num+i], rs[2*num-2+i]])
-			xs.append(x), rs.append(r), commits.append(commit)
-		return xs[3*num-2], rs[3*num-2], commits[3*num-2]
+			commit = self.recv_sum([commits[num+i], commits[2*num-2+i]])
+			commits.append(commit)
+		return commits[3*num-2]
 
-	def prove_nonneg(self, commit, x, r, display = True): # I want to prove that x >= 0
+	def prove_nonneg(self, commit, display = True): # I want to prove that x >= 0
 		if display:
 			print("[+] Alice wants to prove that her value is nonnegative!")
-		self.prove_open(commit, x, r, False)
+		self.prove_open(commit, False)
 		if display:
 			print("[+] Writing x as sum of four squares...")
-		S = four_square(x)
-		x_final, r_final, commit_final = self.prove_sumsq(S)
-		target = (commit_final * inverse(commit, self.N)) % self.N 
-		new_r = (r_final - r)
+		S = four_square(commit.x)
+		commit_final = self.prove_sumsq(S)
+		target = (commit_final.val * inverse(commit.val, self.N)) % self.N 
+		new_r = (commit_final.r - commit.r)
 		result = True
 		if display:
 			print("[+] Finally, prove the summation result is equal to original x.")
@@ -427,55 +427,49 @@ class Prover:
 		return result
 
 	def trial_nonneg(self):
-		x = 178716
-		r, commit = self.commit(x)
-		result = self.prove_nonneg(commit, x, r)
+		commit = self.commit(178716)
+		result = self.prove_nonneg(commit)
 		assert result == True
-		x = -47817
-		r, commit = self.commit(x)
-		result = self.prove_nonneg(commit, x, r)
+		commit = self.commit(-178716)
+		result = self.prove_nonneg(commit)
 		assert result == False
 
-	def prove_minus(commits, xs, rs, display = True):
-		if len(commits) != 3 or len(xs) != 3 or len(rs) != 3:
-			print("[-] prove_sum : incorrect array size")
+	def prove_minus(commits, display = True):
+		if len(commits) != 3:
+			print("[-] prove_minus : incorrect array size")
 			return
 		if display:
 			print("[+] Alice wants to prove a - b = c")
 		for i in range(0, 3):
-			result = self.prove_open(commits[i], xs[i], rs[i], False)
+			result = self.prove_open(commits[i], False)
 			if result == False:
 				return False
 		for i in range(0, 3):
-			result = self.prove_nonneg(commits[i], xs[i], rs[i], False)
+			result = self.prove_nonneg(commits[i], False)
 			if result == False:
 				return False
 		# a - b = c <=> a - b >= 0 and a = b + c or a <= b and c = 0
 		# VAL = ((a - b - x^2 - y^2 - z^2 - w^2)^2 + (a - b - c)^2) * ((b - a - xx^2 - yy^2 - zz^2 - ww^2)^2 + c^2)
-		SEQ_1 = four_square(xs[0] - xs[1])
-		SEQ_2 = four_square(xs[1] - xs[0])
-		SEQ_1_x, SEQ_1_r, SEQ_1_commit = self.prove_sumsq(SEQ_1)
-		SEQ_2_x, SEQ_2_r, SEQ_2_commit = self.prove_sumsq(SEQ_1)
+		SEQ_1 = four_square(commits[0].x - commits[1].x)
+		SEQ_2 = four_square(commits[1].x - commits[0].x)
+		SEQ_1_commit = self.prove_sumsq(SEQ_1)
+		SEQ_2_commit = self.prove_sumsq(SEQ_1)
 		# preparing first equation
-		0_1_x, 0_1_r, 0_1_commit = self.recv_sub([commits[0], commits[1]], [xs[0], xs[1]], [rs[0], rs[1]])
-		
-
-
+		fcommit = self.recv_sub([commits[0], commits[1]])
 
 
 	def trial_minus(self):
 		xs = [1378, 67286, 0]
-		rs = [100, 300, 1678]
-		commits = [self.calc(xs[i], rs[i]) for i in range(0, 3)]
-		result = self.prove_minus(commits, xs, rs)
+		commits = [self.commit(xs[i]) for i in range(0, 3)]
+		result = self.prove_minus(commits)
 		assert result == True
-		xs[1] , xs[2] = 500, 878
-		commits = [self.calc(xs[i], rs[i]) for i in range(0, 3)]
-		result = self.prove_minus(commits, xs, rs)
+		xs = [1378, 500, 1378 - 500]
+		commits = [self.commit(xs[i]) for i in range(0, 3)]
+		result = self.prove_minus(commits)
 		assert result == True
-		xs[1] , xs[2] = 1377, 0
-		commits = [self.calc(xs[i], rs[i]) for i in range(0, 3)]
-		result = self.prove_minus(commits, xs, rs)
+		xs = [1378, 500, 678]
+		commits = [self.commit(xs[i]) for i in range(0, 3)]
+		result = self.prove_minus(commits)
 		assert result == False
 
 # begin main protocol setup
