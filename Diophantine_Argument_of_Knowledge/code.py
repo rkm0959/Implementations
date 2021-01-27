@@ -123,7 +123,7 @@ def four_square(x):
 		return ret
 	if ex % 2 == 0:
 		ret = four_square(2 * x)
-		for i in range(2, 3):
+		for i in range(2, 4):
 			if ret[i] % 2 == ret[0] % 2:
 				ret[i], ret[1] = ret[1], ret[i]
 		fin = []
@@ -136,7 +136,7 @@ def four_square(x):
 	if ex == 1:
 		num = 2 * x
 		if num <= 500:
-			return brute_four_squre(num)
+			return brute_four_square(num)
 		else:
 			while True:
 				w1 = random.randint(0, sqrt(num))
@@ -311,7 +311,7 @@ class Prover:
 		true_r = commits[2].r - commits[0].r - commits[1].r
 		if display:
 			print("[+] Proving dlog knowledge...")
-		result = self.prove_dlogh(target, true_r)
+		result = self.prove_dlogh(target, true_r, False)
 		if display:
 			self.display(result)
 		return result
@@ -333,7 +333,7 @@ class Prover:
 		assert result == True
 		return commit
 
-	def recv_sub(self, commits, xs, rs):
+	def recv_sub(self, commits):
 		x = commits[0].x - commits[1].x
 		commit = self.commit(x)
 		result = self.prove_sum([commits[1], commit, commits[0]], False)
@@ -434,7 +434,7 @@ class Prover:
 		result = self.prove_nonneg(commit)
 		assert result == False
 
-	def prove_minus(commits, display = True):
+	def prove_minus(self, commits, display = True):
 		if len(commits) != 3:
 			print("[-] prove_minus : incorrect array size")
 			return
@@ -448,15 +448,35 @@ class Prover:
 			result = self.prove_nonneg(commits[i], False)
 			if result == False:
 				return False
+		
+		print("[+] Preparing Equations...")
 		# a - b = c <=> a - b >= 0 and a = b + c or a <= b and c = 0
 		# VAL = ((a - b - x^2 - y^2 - z^2 - w^2)^2 + (a - b - c)^2) * ((b - a - xx^2 - yy^2 - zz^2 - ww^2)^2 + c^2)
 		SEQ_1 = four_square(commits[0].x - commits[1].x)
 		SEQ_2 = four_square(commits[1].x - commits[0].x)
 		SEQ_1_commit = self.prove_sumsq(SEQ_1)
-		SEQ_2_commit = self.prove_sumsq(SEQ_1)
+		SEQ_2_commit = self.prove_sumsq(SEQ_2)
 		# preparing first equation
-		fcommit = self.recv_sub([commits[0], commits[1]])
+		fcommit = self.recv_sub([commits[0], commits[1]]) # a-b
+		p1commit = self.recv_sub([fcommit, SEQ_1_commit]) # a-b-x^2-y^2-z^2-w^2
+		p1commit_sq = self.recv_sq(p1commit) # (a-b-x^2-y^2-z^2-w^2)^2
+		p2commit = self.recv_sub([fcommit, commits[2]]) # a-b-c
+		p2commit_sq = self.recv_sq(p2commit) # (a-b-c)^2
+		lhs = self.recv_sum([p1commit_sq, p2commit_sq])
 
+		# preparing second equation
+		scommit = self.recv_sub([commits[1], commits[0]])
+		p3commit = self.recv_sub([scommit, SEQ_2_commit])
+		p3commit_sq = self.recv_sq(p3commit)
+		p4commit_sq = self.recv_sq(commits[2])
+		rhs = self.recv_sum([p3commit_sq, p4commit_sq])
+
+		# mul
+		fin = self.recv_mul([lhs, rhs])
+		result = self.prove_dlogh(fin.val, fin.r, False)
+		if display:
+			self.display(result)
+		return result
 
 	def trial_minus(self):
 		xs = [1378, 67286, 0]
@@ -470,6 +490,46 @@ class Prover:
 		xs = [1378, 500, 678]
 		commits = [self.commit(xs[i]) for i in range(0, 3)]
 		result = self.prove_minus(commits)
+		assert result == False
+
+	def prove_MSB(self, commits, k, display = True):
+		if len(commits) != 2:
+			print("[-] prove_MSB : incorrect array size")
+			return
+		if display:
+			print("[+] Alice wants to prove (a >> k) = b")
+		for i in range(0, 2):
+			result = self.prove_open(commits[i], False)
+			if result == False:
+				return False
+		for i in range(0, 2):
+			result = self.prove_nonneg(commits[i], False)
+			if result == False:
+				return False
+		commit_pow2 = self.commit(1 << k)
+		self.open(commit_pow2)
+		commit_pow2_1 = self.commit((1 << k) - 1)
+		self.open(commit_pow2_1)
+		commit_sub = self.recv_mul([commits[1], commit_pow2])
+		commit_rem_1 = self.recv_sub([commits[0], commit_sub])
+		commit_rem_2 = self.recv_sub([commit_pow2_1, commit_rem_1])
+		result = True
+		if self.prove_nonneg(commit_rem_1, False) == False:
+			result = False
+		if self.prove_nonneg(commit_rem_2, False) == False:
+			result = False
+		if display:
+			self.display(result)
+		return result
+
+	def trial_MSB(self):
+		xs = [197691847917, 197691847917 >> 20]
+		commits = [self.commit(xs[i]) for i in range(0, 2)]
+		result = self.prove_MSB(commits, 20)
+		assert result == True
+		xs = [197691847917, 1 + (197691847917 >> 20)]
+		commits = [self.commit(xs[i]) for i in range(0, 2)]
+		result = self.prove_MSB(commits, 20)
 		assert result == False
 
 # begin main protocol setup
@@ -499,8 +559,7 @@ print("[*] Proving Alice has x >= 0")
 Alice.trial_nonneg()
 
 print("[*] Bounded Arithmetic ShowCase : a - b = c")
+Alice.trial_minus()
 
-# Alice.trial_minus()
-
-print("[*] Bounded Arithmetic ShowCase : MSB(a, k) = b")
-# Alice.trial_MSB()
+print("[*] Bounded Arithmetic ShowCase : (a >> k) = b")
+Alice.trial_MSB()
