@@ -1,6 +1,5 @@
 # extremely rough showcase of Diophantine Argument of Knowledge
 # we assume honest verifiers. also, the algorithm is interactive
-# we could (?) add fiat-shamir heuristic to make it non-interactive
 # this code does not really care about reducing proof sizes as long as they are doable
 
 import random
