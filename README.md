@@ -9,4 +9,4 @@
 List of Algorithms
 
 - Diophantine Argument of Knowledge
-
+- Manger's Attack
