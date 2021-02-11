@@ -10,3 +10,4 @@ List of Algorithms
 
 - Diophantine Argument of Knowledge
 - Manger's Attack
+- Half-GCD Algorithm for Polynomial GCD
