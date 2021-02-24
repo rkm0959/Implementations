@@ -2,7 +2,7 @@
 
 Paper : https://arxiv.org/pdf/1812.00146.pdf
 
-Blog (for Context) : https://rkm0959.tistory.com/208, https://rkm0959.tistory.com/209, https://rkm0959.tistory.com/210
+Blog : https://rkm0959.tistory.com/208, https://rkm0959.tistory.com/209, https://rkm0959.tistory.com/210
 
 
 
