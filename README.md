@@ -2,6 +2,7 @@
 
 - Algorithms from papers, books and stuff
 - implementations will be really rough, as their meaning is to show basic concepts
+- obviously, these are 100% for educational purposes (especially, for my learning)
 - Topics : Number Theory, Cryptography, Convex Optimization
 
 
