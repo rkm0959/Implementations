@@ -13,3 +13,4 @@ List of Algorithms
 - Manger's Attack
 - Half-GCD Algorithm for Polynomial GCD
 - Chebyshev Method (Acceleration)
+- Operator Splitting Performance Estimation Problem
