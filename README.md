@@ -15,3 +15,4 @@ List of Algorithms
 - Chebyshev Method (Acceleration)
 - Operator Splitting Performance Estimation Problem
 - Sqrt Attack on CRT-RSA
+- Weighted Off-By-One IQC, Heavy Ball Method
