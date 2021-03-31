@@ -14,3 +14,4 @@ List of Algorithms
 - Half-GCD Algorithm for Polynomial GCD
 - Chebyshev Method (Acceleration)
 - Operator Splitting Performance Estimation Problem
+- Sqrt Attack on CRT-RSA
