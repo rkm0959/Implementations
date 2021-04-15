@@ -16,3 +16,4 @@ List of Algorithms
 - Operator Splitting Performance Estimation Problem
 - Sqrt Attack on CRT-RSA
 - Weighted Off-By-One IQC, Heavy Ball Method
+- Catalyst Acceleration on SAGA
