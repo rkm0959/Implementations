@@ -1,6 +1,6 @@
 # Sqrt Attack for CRT-RSA
 
-This repository implements an attack that factorizes `n` in time complexity `O(sqrt(min(d_p, d_q)))`.
+This repository implements an attack that factorizes `n` in time complexity `O(sqrt(min(d_p, d_q)))` (ignoring logs).
 
 This problem was also submitted to picoCTF 2021 by me, with the easier version requiring `O(min(d_p, d_q))` complexity.
 
